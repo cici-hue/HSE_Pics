@@ -1,89 +1,145 @@
 import streamlit as st
-import sys
-import subprocess
+import pdfplumber
+from pdf2image import convert_from_bytes
+import tempfile
 import os
+from PIL import Image
+import zipfile
+import json
+import re
 
-# 尝试导入PyMuPDF，如果失败则自动安装
-def install_pymupdf():
-    """安装PyMuPDF包"""
-    try:
-        st.info("正在安装PyMuPDF...")
-        # 使用pip安装
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "PyMuPDF==1.23.8"])
-        st.success("PyMuPDF安装成功！")
-        return True
-    except Exception as e:
-        st.error(f"安装失败: {e}")
-        return False
+st.set_page_config(page_title="PDF缺陷提取器", layout="wide")
+st.title("📄 PDF缺陷图片提取器（替代方案）")
 
-# 尝试导入fitz
-try:
-    import fitz
-    st.success("✅ PyMuPDF导入成功！")
-    FITZ_AVAILABLE = True
-except ImportError:
-    st.warning("❌ PyMuPDF未安装")
-    if st.button("点击安装PyMuPDF"):
-        if install_pymupdf():
-            # 重新加载模块
-            import importlib
-            import fitz
-            FITZ_AVAILABLE = True
-            st.rerun()  # 重新运行应用
-        else:
-            st.error("安装失败，请检查日志")
-            FITZ_AVAILABLE = False
-    else:
-        FITZ_AVAILABLE = False
+st.markdown("""
+这个版本使用pdfplumber和pdf2image库，不需要PyMuPDF。
+功能：提取PDF中的文本和图片。
+""")
 
-# 设置页面
-st.set_page_config(page_title="PDF测试", layout="wide")
-st.title("📄 PDF缺陷提取器")
+uploaded_files = st.file_uploader(
+    "上传PDF文件（支持多文件）",
+    type=["pdf"],
+    accept_multiple_files=True
+)
 
-# 显示环境信息
-st.write(f"Python版本: {sys.version}")
-st.write(f"当前目录: {os.getcwd()}")
-st.write(f"PyMuPDF可用: {FITZ_AVAILABLE}")
-
-# 如果PyMuPDF可用，显示上传功能
-if FITZ_AVAILABLE:
-    uploaded_file = st.file_uploader("上传PDF文件", type=["pdf"])
+def extract_text_near_image(page_text, search_radius=500):
+    """在文本中查找缺陷信息"""
+    lines = page_text.split('\n')
     
-    if uploaded_file:
-        st.success(f"已上传文件: {uploaded_file.name}")
+    for i, line in enumerate(lines):
+        line_lower = line.lower()
         
-        # 临时保存文件
-        import tempfile
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(uploaded_file.getvalue())
-            tmp_path = tmp.name
-        
-        try:
-            # 打开PDF
-            doc = fitz.open(tmp_path)
-            st.success(f"✅ PDF打开成功！共 {len(doc)} 页")
+        # 查找包含"defect code"的行
+        if "defect code" in line_lower:
+            # 提取缺陷代码
+            code_match = re.search(r'defect code\s*[:=]?\s*(\d+)', line, re.IGNORECASE)
+            if code_match:
+                defect_code = code_match.group(1)
+                
+                # 查找原因（在后续行中）
+                reason = "Unknown"
+                for j in range(i+1, min(i+5, len(lines))):
+                    if "defect" in lines[j].lower():
+                        # 提取缺陷原因
+                        reason_match = re.search(r'(.+?)\s+defect', lines[j], re.IGNORECASE)
+                        if reason_match:
+                            reason = reason_match.group(1).strip()
+                        break
+                
+                return {
+                    "defect_code": defect_code,
+                    "reason": reason
+                }
+    
+    return None
+
+if uploaded_files:
+    if st.button("🚀 开始处理", type="primary"):
+        with st.spinner("处理中..."):
+            all_results = []
             
-            # 显示一些信息
-            col1, col2 = st.columns(2)
-            with col1:
-                st.metric("总页数", len(doc))
+            for uploaded_file in uploaded_files:
+                st.write(f"处理文件: {uploaded_file.name}")
+                
+                try:
+                    # 使用pdfplumber提取文本
+                    with pdfplumber.open(uploaded_file) as pdf:
+                        for page_num, page in enumerate(pdf.pages):
+                            # 提取文本
+                            text = page.extract_text()
+                            
+                            if text:
+                                # 查找缺陷信息
+                                defect_info = extract_text_near_image(text)
+                                
+                                if defect_info:
+                                    # 使用pdf2image转换当前页为图片
+                                    images = convert_from_bytes(
+                                        uploaded_file.getvalue(),
+                                        first_page=page_num+1,
+                                        last_page=page_num+1,
+                                        dpi=150
+                                    )
+                                    
+                                    if images:
+                                        all_results.append({
+                                            "file": uploaded_file.name,
+                                            "page": page_num + 1,
+                                            "defect_code": defect_info["defect_code"],
+                                            "reason": defect_info["reason"],
+                                            "image": images[0]  # 第一张图片
+                                        })
+                    
+                    st.success(f"✓ {uploaded_file.name}: 处理完成")
+                    
+                except Exception as e:
+                    st.error(f"❌ 处理 {uploaded_file.name} 时出错: {e}")
             
-            # 提取第一页的文本（测试）
-            if st.button("提取第一页文本"):
-                page = doc[0]
-                text = page.get_text()
-                st.text_area("第一页文本", text[:500] + "..." if len(text) > 500 else text, height=200)
-            
-            doc.close()
-            
-        except Exception as e:
-            st.error(f"处理PDF时出错: {e}")
-        
-        finally:
-            # 清理临时文件
-            try:
-                os.unlink(tmp_path)
-            except:
-                pass
+            # 显示结果
+            if all_results:
+                st.success(f"✅ 共找到 {len(all_results)} 个缺陷")
+                
+                # 创建ZIP文件
+                with tempfile.TemporaryDirectory() as tmpdir:
+                    # 按缺陷原因组织文件夹
+                    for result in all_results:
+                        folder_name = result["reason"].replace("/", "_").replace("\\", "_")[:50]
+                        folder_path = os.path.join(tmpdir, folder_name)
+                        os.makedirs(folder_path, exist_ok=True)
+                        
+                        # 保存图片
+                        img_path = os.path.join(
+                            folder_path,
+                            f"{result['file']}_page{result['page']}_code{result['defect_code']}.jpg"
+                        )
+                        result["image"].save(img_path, "JPEG")
+                    
+                    # 创建ZIP
+                    zip_path = os.path.join(tmpdir, "缺陷提取结果.zip")
+                    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                        for root, dirs, files in os.walk(tmpdir):
+                            for file in files:
+                                if file.endswith('.zip'):
+                                    continue
+                                file_path = os.path.join(root, file)
+                                arcname = os.path.relpath(file_path, tmpdir)
+                                zipf.write(file_path, arcname)
+                    
+                    # 提供下载
+                    with open(zip_path, "rb") as f:
+                        st.download_button(
+                            "📦 下载所有提取结果",
+                            f.read(),
+                            file_name="缺陷提取结果.zip",
+                            mime="application/zip"
+                        )
+                
+                # 显示统计
+                st.subheader("📊 提取结果")
+                for result in all_results:
+                    st.write(f"- **{result['reason']}** (代码: {result['defect_code']}) - {result['file']} 第{result['page']}页")
+            else:
+                st.warning("未找到缺陷信息")
+
 else:
-    st.error("请先安装PyMuPDF依赖")
+    st.info("请上传PDF文件开始处理")
