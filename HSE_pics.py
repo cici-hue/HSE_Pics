@@ -1,6 +1,6 @@
 import streamlit as st
-# import fitz  # PyMuPDF
-import PyMuPDF  # PyMuPDF
+import fitz  # PyMuPDF
+# import PyMuPDF  # PyMuPDF
 import re
 import zipfile
 import tempfile
