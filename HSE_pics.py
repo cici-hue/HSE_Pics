@@ -14,20 +14,20 @@ from pptx.enum.text import PP_ALIGN
 import hashlib
 import io
 
-# 设置页面配置
+# Set page configuration
 st.set_page_config(
-    page_title="HSE缺陷图片提取与PPT生成系统",
+    page_title="HSE Defect Image Extraction and PPT Generation System",
     page_icon="📊",
     layout="wide"
 )
 
 class PDFDefectExtractor:
-    """PDF缺陷提取器类"""
+    """PDF Defect Extractor Class"""
     def __init__(self):
         self.extracted_items = []
     
     def extract_defects_from_pdf(self, pdf_file, filename):
-        """从单个PDF文件中提取缺陷信息"""
+        """Extract defect information from a single PDF file"""
         extracted_items = []
         
         try:
@@ -39,28 +39,28 @@ class PDFDefectExtractor:
                 blocks = page.get_text("dict")["blocks"]
                 image_list = page.get_images(full=True)
                 
-                # 找出所有图片块
+                # Find all image blocks
                 image_blocks = []
                 for i, block in enumerate(blocks):
-                    if block["type"] == 1:  # 图片块
+                    if block["type"] == 1:  # Image block
                         image_blocks.append({
                             "index": i,
                             "bbox": block["bbox"],
                             "y_position": block["bbox"][1]
                         })
                 
-                # 按y坐标排序（从上到下）
+                # Sort by y-coordinate (top to bottom)
                 image_blocks.sort(key=lambda x: x["y_position"])
                 
-                # 处理每个图片块（跳过第一个）
+                # Process each image block (skip the first one)
                 for block_idx, block_info in enumerate(image_blocks):
-                    if block_idx == 0:  # 跳过第一张图片
+                    if block_idx == 0:  # Skip the first image
                         continue
                     
                     result = self._analyze_text_blocks(blocks, block_info["index"])
                     
                     if result and "defect_code" in result:
-                        # 根据图片块的位置查找最接近的图片
+                        # Find the closest image based on block position
                         bbox = block_info["bbox"]
                         matched_image_idx = self._find_matching_image(page, bbox, image_list)
                         
@@ -69,7 +69,7 @@ class PDFDefectExtractor:
                                 xref = image_list[matched_image_idx][0]
                                 base_image = doc.extract_image(xref)
                                 
-                                # 清理缺陷原因作为文件名
+                                # Clean defect reason for filename
                                 reason = result.get("reason", f"defect_{result['defect_code']}")
                                 clean_reason = self._sanitize_filename(reason)
                                 
@@ -87,24 +87,24 @@ class PDFDefectExtractor:
                                 })
                                 
                             except Exception as e:
-                                st.warning(f"提取图片失败: {e}")
+                                st.warning(f"Failed to extract image: {e}")
                                 continue
             
             doc.close()
         except Exception as e:
-            st.error(f"处理PDF文件 {filename} 时出错: {str(e)}")
+            st.error(f"Error processing PDF file {filename}: {str(e)}")
         
         return extracted_items
     
     def _analyze_text_blocks(self, blocks, start_index):
-        """分析图片块后面的6个文本块"""
+        """Analyze the 6 text blocks following an image block"""
         result = {}
         text_blocks = []
         current_index = start_index + 1
         
         while len(text_blocks) < 6 and current_index < len(blocks):
             block = blocks[current_index]
-            if block["type"] == 0:  # 文本块
+            if block["type"] == 0:  # Text block
                 text = self._extract_text_from_block(block)
                 if text.strip():
                     text_blocks.append(text)
@@ -113,18 +113,18 @@ class PDFDefectExtractor:
         if len(text_blocks) < 6:
             return None
         
-        # 检查第5个文本块
+        # Check the 5th text block
         if "defect code" not in text_blocks[4].lower():
             return None
         
-        # 提取缺陷代码
+        # Extract defect code
         code_match = re.search(r'defect code\s+(\d+)', text_blocks[4], re.IGNORECASE)
         if not code_match:
             return None
         
         result["defect_code"] = code_match.group(1)
         
-        # 提取原因
+        # Extract reason
         if "defect" in text_blocks[5].lower():
             parts = re.split(r'\s+defect', text_blocks[5], flags=re.IGNORECASE)
             if parts and parts[0].strip():
@@ -137,7 +137,7 @@ class PDFDefectExtractor:
         return result
     
     def _find_matching_image(self, page, bbox, image_list):
-        """查找匹配的图片"""
+        """Find matching image"""
         block_center_x = (bbox[0] + bbox[2]) / 2
         block_center_y = (bbox[1] + bbox[3]) / 2
         
@@ -163,7 +163,7 @@ class PDFDefectExtractor:
         return best_match_idx
     
     def _extract_text_from_block(self, block):
-        """从文本块中提取文本"""
+        """Extract text from text block"""
         text = ""
         if "lines" in block:
             for line in block["lines"]:
@@ -173,35 +173,35 @@ class PDFDefectExtractor:
         return text.strip()
     
     def _sanitize_filename(self, filename):
-        """清理文件名"""
+        """Clean filename"""
         if not filename:
             return "unknown"
         
-        # 移除特殊字符
+        # Remove special characters
         illegal_chars = ['<', '>', ':', '"', '/', '\\', '|', '?', '*', '\n', '\r', '\t']
         for char in illegal_chars:
             filename = filename.replace(char, '_')
         
-        # 替换多个下划线为单个
+        # Replace multiple underscores with single
         filename = re.sub(r'_{2,}', '_', filename)
         
-        # 限制长度
+        # Limit length
         if len(filename) > 100:
             filename = filename[:100]
         
         return filename.strip()
 
 class PPTCreator:
-    """PPT生成器类"""
+    """PPT Generator Class"""
     def __init__(self):
         pass
     
     def create_ppt_from_images(self, all_defects, ppt_name="Defect_Report.pptx"):
-        """从提取的图片创建PPT"""
+        """Create PPT from extracted images"""
         if not all_defects:
             return None
         
-        # 按缺陷原因分类图片
+        # Categorize images by defect reason
         defects_by_reason = OrderedDict()
         file_counter = defaultdict(int)
         
@@ -212,7 +212,7 @@ class PPTCreator:
             if not clean_reason or clean_reason == "_":
                 clean_reason = f"defect_{defect.get('defect_code', 'unknown')}"
             
-            # 处理重复的文件名
+            # Handle duplicate filenames
             file_counter[clean_reason] += 1
             count = file_counter[clean_reason]
             
@@ -229,47 +229,47 @@ class PPTCreator:
                 'clean_name': clean_reason
             })
         
-        # 按缺陷原因名称排序
+        # Sort by defect reason name
         defects_by_reason = OrderedDict(sorted(defects_by_reason.items()))
         
-        # 创建PPT
+        # Create PPT
         return self._create_pptx_by_defect_reason(defects_by_reason, ppt_name)
     
     def _create_pptx_by_defect_reason(self, defects_by_reason, ppt_name):
-        """创建基于缺陷原因分类的PPT"""
+        """Create PPT categorized by defect reason"""
         try:
-            # 创建PPT对象
+            # Create PPT object
             prs = Presentation()
             
-            # 设置幻灯片尺寸（16:9）
+            # Set slide size (16:9)
             prs.slide_width = Inches(16)
             prs.slide_height = Inches(9)
             
-            # 添加标题页
+            # Add title page
             self._add_title_page(prs, len(defects_by_reason), 
                                sum(len(images) for images in defects_by_reason.values()))
             
-            # 添加目录页
+            # Add table of contents page
             self._add_table_of_contents(prs, defects_by_reason)
             
-            # 为每种缺陷类型创建内容
+            # Create content for each defect type
             for defect_index, (defect_reason, images) in enumerate(defects_by_reason.items(), 1):
-                # 添加缺陷类型标题页
+                # Add defect type title page
                 self._add_defect_title_page(prs, defect_reason, defect_index, len(defects_by_reason))
                 
-                # 将图片分组，每3张一组
+                # Group images, 3 per group
                 for i in range(0, len(images), 3):
                     img_group = images[i:i+3]
                     group_number = i // 3 + 1
                     total_groups = (len(images) - 1) // 3 + 1
                     
-                    # 添加图片页
+                    # Add image page
                     self._add_defect_images_page(prs, defect_reason, img_group, group_number, total_groups)
             
-            # 添加结束页
+            # Add ending page
             self._add_ending_page(prs)
             
-            # 保存到内存
+            # Save to memory
             ppt_buffer = io.BytesIO()
             prs.save(ppt_buffer)
             ppt_buffer.seek(0)
@@ -277,11 +277,11 @@ class PPTCreator:
             return ppt_buffer
             
         except Exception as e:
-            st.error(f"创建PPT失败: {str(e)}")
+            st.error(f"Failed to create PPT: {str(e)}")
             return None
     
     def _add_title_page(self, prs, defect_types_count, total_images_count):
-        """添加标题页"""
+        """Add title page"""
         title_slide_layout = prs.slide_layouts[0]
         slide = prs.slides.add_slide(title_slide_layout)
         
@@ -294,16 +294,16 @@ class PPTCreator:
                         f"Total Images: {total_images_count}\n" \
                         f"Generated: {self._get_current_date()}"
         
-        # 调整副标题字体大小
+        # Adjust subtitle font size
         for paragraph in subtitle.text_frame.paragraphs:
             paragraph.font.size = Pt(20)
     
     def _add_table_of_contents(self, prs, defects_by_reason):
-        """添加目录页"""
+        """Add table of contents page"""
         blank_slide_layout = prs.slide_layouts[6]
         slide = prs.slides.add_slide(blank_slide_layout)
         
-        # 添加标题
+        # Add title
         left = Inches(0.5)
         top = Inches(0.5)
         width = Inches(15)
@@ -315,7 +315,7 @@ class PPTCreator:
         title_frame.paragraphs[0].font.size = Pt(32)
         title_frame.paragraphs[0].font.bold = True
         
-        # 添加目录内容
+        # Add table of contents content
         left = Inches(1)
         top = Inches(1.5)
         width = Inches(14)
@@ -332,11 +332,11 @@ class PPTCreator:
             p.space_after = Pt(5)
     
     def _add_defect_title_page(self, prs, defect_reason, defect_index, total_defects):
-        """添加缺陷类型标题页"""
+        """Add defect type title page"""
         blank_slide_layout = prs.slide_layouts[6]
         slide = prs.slides.add_slide(blank_slide_layout)
         
-        # 添加标题
+        # Add title
         left = Inches(1)
         top = Inches(2)
         width = Inches(14)
@@ -345,14 +345,14 @@ class PPTCreator:
         title_box = slide.shapes.add_textbox(left, top, width, height)
         title_frame = title_box.text_frame
         
-        # 添加缺陷类型标题
+        # Add defect type title
         p = title_frame.paragraphs[0]
         p.text = defect_reason
         p.font.size = Pt(44)
         p.font.bold = True
         p.alignment = PP_ALIGN.CENTER
         
-        # 添加页码信息
+        # Add page number info
         p = title_frame.add_paragraph()
         p.text = f"Defect Type {defect_index} of {total_defects}"
         p.font.size = Pt(24)
@@ -360,21 +360,21 @@ class PPTCreator:
         p.alignment = PP_ALIGN.CENTER
     
     def _add_defect_images_page(self, prs, defect_reason, img_group, group_number, total_groups):
-        """添加缺陷图片页"""
+        """Add defect image page"""
         blank_slide_layout = prs.slide_layouts[6]
         slide = prs.slides.add_slide(blank_slide_layout)
         
-        # 添加缺陷原因标题（顶部）
+        # Add defect reason header (top)
         self._add_defect_header(slide, defect_reason, group_number, total_groups)
         
-        # 添加图片
+        # Add images
         self._add_images_with_order_numbers(slide, img_group)
         
-        # 添加页码
+        # Add page number
         self._add_page_number(slide, group_number, total_groups)
     
     def _add_defect_header(self, slide, defect_reason, group_number, total_groups):
-        """添加页眉：缺陷原因"""
+        """Add header: defect reason"""
         left = Inches(0.5)
         top = Inches(0.2)
         width = Inches(15)
@@ -383,13 +383,13 @@ class PPTCreator:
         header_box = slide.shapes.add_textbox(left, top, width, height)
         header_frame = header_box.text_frame
         
-        # 添加缺陷原因
+        # Add defect reason
         p = header_frame.paragraphs[0]
         p.text = f"Defect Reason: {defect_reason}"
         p.font.size = Pt(28)
         p.font.bold = True
         
-        # 添加分组信息（如果需要）
+        # Add group info (if needed)
         if total_groups > 1:
             p = header_frame.add_paragraph()
             p.text = f"Group {group_number} of {total_groups}"
@@ -397,14 +397,14 @@ class PPTCreator:
             p.font.color.rgb = RGBColor(100, 100, 100)
     
     def _add_images_with_order_numbers(self, slide, img_group):
-        """添加图片和订单号"""
+        """Add images and order numbers"""
         img_count = len(img_group)
         if img_count == 0:
             return
         
-        # 根据图片数量设置不同的布局
+        # Set different layouts based on image count
         if img_count == 1:
-            # 1张图片：居中显示
+            # 1 image: centered
             width = Inches(8)
             height = Inches(5.38)
             left = (Inches(16) - width) / 2
@@ -413,7 +413,7 @@ class PPTCreator:
             positions = [(left, top, width, height)]
             
         elif img_count == 2:
-            # 2张图片：并排显示
+            # 2 images: side by side
             width = Inches(6)
             height = Inches(5.38)
             total_width = 2 * width + Inches(1)
@@ -426,7 +426,7 @@ class PPTCreator:
             ]
             
         else:  # img_count == 3
-            # 3张图片：横向并排显示，使用新尺寸
+            # 3 images: horizontal side by side, using new dimensions
             width = Inches(4.78)
             height = Inches(5.38)
             
@@ -440,28 +440,28 @@ class PPTCreator:
                 (start_left + 2 * (width + Inches(0.3)), top, width, height)
             ]
         
-        # 添加图片和订单号
+        # Add images and order numbers
         for i, (img_info, (left, top, width, height)) in enumerate(zip(img_group, positions)):
             try:
-                # 保存图片到临时文件
+                # Save image to temporary file
                 with tempfile.NamedTemporaryFile(delete=False, suffix=f".{img_info['image_ext']}") as tmp_file:
                     tmp_file.write(img_info['image_data'])
                     tmp_file_path = tmp_file.name
                 
-                # 添加订单号（在图片上方）
+                # Add order number (above image)
                 self._add_order_number(slide, img_info['order_number'], left, top - Inches(0.4), width)
                 
-                # 添加图片
+                # Add image
                 slide.shapes.add_picture(tmp_file_path, left, top, width=width, height=height)
                 
-                # 删除临时文件
+                # Delete temporary file
                 os.unlink(tmp_file_path)
                 
             except Exception as e:
-                st.warning(f"添加图片失败: {e}")
+                st.warning(f"Failed to add image: {e}")
     
     def _add_order_number(self, slide, order_number, left, top, width):
-        """添加订单号标签"""
+        """Add order number label"""
         height = Inches(0.3)
         
         textbox = slide.shapes.add_textbox(left, top, width, height)
@@ -474,7 +474,7 @@ class PPTCreator:
         text_frame.paragraphs[0].alignment = PP_ALIGN.CENTER
     
     def _add_page_number(self, slide, current_group, total_groups):
-        """添加页码"""
+        """Add page number"""
         left = Inches(14.5)
         top = Inches(8.2)
         width = Inches(1)
@@ -489,11 +489,11 @@ class PPTCreator:
         text_frame.paragraphs[0].alignment = PP_ALIGN.RIGHT
     
     def _add_ending_page(self, prs):
-        """添加结束页"""
+        """Add ending page"""
         blank_slide_layout = prs.slide_layouts[6]
         slide = prs.slides.add_slide(blank_slide_layout)
         
-        # 添加结束语
+        # Add closing text
         left = Inches(2)
         top = Inches(3)
         width = Inches(12)
@@ -515,12 +515,12 @@ class PPTCreator:
         p.alignment = PP_ALIGN.CENTER
     
     def _get_current_date(self):
-        """获取当前日期"""
+        """Get current date"""
         from datetime import datetime
         return datetime.now().strftime("%Y-%m-%d")
     
     def _sanitize_filename(self, filename):
-        """清理文件名"""
+        """Clean filename"""
         if not filename:
             return "unknown"
         
@@ -536,23 +536,23 @@ class PPTCreator:
         return filename.strip()
 
 def main():
-    """主应用函数"""
-    st.title("📊 PDF缺陷提取与PPT生成系统")
+    """Main application function"""
+    st.title("📊 HSE Defect Pics Extraction and PPT Generation System")
     st.markdown("""
-    ### 功能说明：
-    1. **上传PDF文件**：上传HSE包含缺陷图片的Claim report PDF格式文档
-    2. **自动提取缺陷图片**：系统自动识别和提取缺陷图片
-    3. **生成PPT报告**：自动生成按缺陷原因分类的PPT报告
-    4. **下载结果**：可以下载提取的图片和生成的PPT
+    ### Features:
+    1. **Upload PDF files**: Upload HSE claim report PDF documents containing defect images
+    2. **Automatic defect image extraction**: System automatically identifies and extracts defect images
+    3. **Generate PPT report**: Automatically generates PPT report categorized by defect reason
+    4. **Download results**: Download extracted images and generated PPT
     """)
     
-    # 创建两个主要功能选项卡
-    tab1, tab2 = st.tabs(["📄 PDF缺陷提取", "📊 PPT生成"])
+    # Create two main function tabs
+    tab1, tab2 = st.tabs(["📄 PDF Defect Extraction", "📊 PPT Generation"])
     
     with tab1:
-        st.header("PDF缺陷图片提取")
+        st.header("PDF Defect Image Extraction")
         uploaded_files = st.file_uploader(
-            "选择PDF文件（可多选）",
+            "Select PDF files (multiple allowed)",
             type="pdf",
             accept_multiple_files=True,
             key="pdf_uploader"
@@ -562,69 +562,69 @@ def main():
             extractor = PDFDefectExtractor()
             all_defects = []
             
-            # 进度条
+            # Progress bar
             progress_bar = st.progress(0)
             status_text = st.empty()
             
-            with st.spinner("正在处理PDF文件..."):
+            with st.spinner("Processing PDF files..."):
                 for i, uploaded_file in enumerate(uploaded_files):
-                    # 更新进度
+                    # Update progress
                     progress = (i) / len(uploaded_files)
                     progress_bar.progress(progress)
-                    status_text.text(f"正在处理: {uploaded_file.name} ({i+1}/{len(uploaded_files)})")
+                    status_text.text(f"Processing: {uploaded_file.name} ({i+1}/{len(uploaded_files)})")
                     
-                    # 提取缺陷
+                    # Extract defects
                     defects = extractor.extract_defects_from_pdf(uploaded_file, uploaded_file.name)
                     for defect in defects:
                         defect['pdf_file'] = uploaded_file.name
                         all_defects.append(defect)
                 
                 progress_bar.progress(1.0)
-                status_text.text("处理完成!")
+                status_text.text("Processing complete!")
             
             if all_defects:
-                st.success(f"✅ 提取完成! 共找到 {len(all_defects)} 个缺陷")
+                st.success(f"✅ Extraction complete! Found {len(all_defects)} defects")
                 
-                # 显示统计信息
+                # Display statistics
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("PDF文件数", len(uploaded_files))
+                    st.metric("PDF Files", len(uploaded_files))
                 with col2:
-                    st.metric("总缺陷数", len(all_defects))
+                    st.metric("Total Defects", len(all_defects))
                 with col3:
-                    # 统计缺陷类型
+                    # Count defect types
                     defect_types = len(set(d['reason'] for d in all_defects))
-                    st.metric("缺陷类型数", defect_types)
+                    st.metric("Defect Types", defect_types)
                 
-                # 显示缺陷详情表格
-                st.subheader("📋 缺陷详情")
+                # Display defect details table
+                st.subheader("📋 Defect Details")
                 display_data = []
-                for i, defect in enumerate(all_defects[:50], 1):  # 最多显示50条
+                for i, defect in enumerate(all_defects[:50], 1):  # Show max 50 entries
                     display_data.append({
-                        "序号": i,
-                        "PDF文件": defect['pdf_name'],
-                        "页码": defect['page'],
-                        "缺陷代码": defect.get('defect_code', 'N/A'),
-                        "缺陷原因": defect['reason']
+                        "No.": i,
+                        "PDF File": defect['pdf_name'],
+                        "Page": defect['page'],
+                        "Defect Code": defect.get('defect_code', 'N/A'),
+                        "Defect Reason": defect['reason']
                     })
                 
                 st.dataframe(display_data, use_container_width=True)
                 
-                # 创建ZIP文件供下载
-                st.subheader("📥 下载提取的图片")
+                # Create ZIP file for download
+                st.subheader("📥 Download Extracted Images")
                 
                 with tempfile.TemporaryDirectory() as tmpdir:
-                    # 创建ZIP文件
+                    # Create ZIP file
                     zip_buffer = io.BytesIO()
                     with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                        # 按PDF文件创建文件夹
+                        # Create folders by PDF file
                         file_counter = defaultdict(int)
                         
                         for defect in all_defects:
                             pdf_name = Path(defect['pdf_name']).stem
                             reason = defect['clean_reason']
                             
-                            # 处理重复的文件名
+                            # Handle duplicate filenames
                             file_counter[(pdf_name, reason)] += 1
                             count = file_counter[(pdf_name, reason)]
                             
@@ -633,65 +633,65 @@ def main():
                             else:
                                 filename = f"{reason}_{count}.{defect['image_ext']}"
                             
-                            # 完整的ZIP路径
+                            # Full ZIP path
                             zip_path = f"{pdf_name}/{filename}"
                             
-                            # 添加到ZIP
+                            # Add to ZIP
                             zip_file.writestr(zip_path, defect['image_data'])
                     
-                    # 创建下载按钮
+                    # Create download button
                     zip_buffer.seek(0)
                     st.download_button(
-                        label="📦 下载所有图片 (ZIP格式)",
+                        label="📦 Download All Images (ZIP Format)",
                         data=zip_buffer,
                         file_name="extracted_defect_images.zip",
                         mime="application/zip",
-                        help="点击下载包含所有提取图片的ZIP文件"
+                        help="Click to download ZIP file containing all extracted images"
                     )
                 
-                # 预览部分图片
-                st.subheader("🖼️ 图片预览")
+                # Preview some images
+                st.subheader("🖼️ Image Preview")
                 preview_cols = st.columns(4)
                 
-                for idx, defect in enumerate(all_defects[:8]):  # 最多预览8张
+                for idx, defect in enumerate(all_defects[:8]):  # Preview max 8 images
                     col_idx = idx % 4
                     with preview_cols[col_idx]:
-                        # 显示图片
+                        # Display image
                         st.image(
                             defect['image_data'],
-                            caption=f"{defect['reason']} (第{defect['page']}页)",
+                            caption=f"{defect['reason']} (Page {defect['page']})",
                             use_container_width=True
                         )
                 
-                # 保存提取结果到session state
+                # Save extraction results to session state
                 st.session_state.extracted_defects = all_defects
-                st.success("✅ 提取结果已保存，可以切换到PPT生成标签页")
+                st.success("✅ Extraction results saved, you can switch to the PPT Generation tab")
                 
             else:
-                st.warning("⚠️ 未找到任何缺陷信息")
+                st.warning("⚠️ No defect information found")
     
     with tab2:
-        st.header("PPT报告生成")
+        st.header("PPT Report Generation")
         
         if 'extracted_defects' not in st.session_state or not st.session_state.extracted_defects:
-            st.info("👈 请先在左侧标签页上传并提取PDF文件")
+            st.info("👈 Please upload and extract PDF files in the left tab first")
         else:
-            st.success(f"✅ 已加载 {len(st.session_state.extracted_defects)} 个缺陷")
+            st.success(f"✅ Loaded {len(st.session_state.extracted_defects)} defects")
             
-            # PPT选项
+            # PPT options
             col1, col2 = st.columns(2)
             with col1:
-                ppt_name = st.text_input("PPT文件名", "Defect_Report.pptx")
+                ppt_name = st.text_input("PPT File Name", "Defect_Report.pptx")
             with col2:
                 ppt_layout = st.selectbox(
-                    "PPT布局",
-                    ["每页3张图片", "每页2张图片", "每页1张图片"],
+                    "PPT Layout",
+                    ["3 images per page", "2 images per page", "1 image per page"],
                     index=0
                 )
             
-            # 生成PPT
-            if st.button("🚀 生成PPT报告", type="primary"):
-                with st.spinner("正在生成PPT..."):
+            # Generate PPT
+            if st.button("🚀 Generate PPT Report", type="primary"):
+                with st.spinner("Generating PPT..."):
                     ppt_creator = PPTCreator()
                     ppt_buffer = ppt_creator.create_ppt_from_images(
                         st.session_state.extracted_defects,
@@ -699,21 +699,21 @@ def main():
                     )
                 
                 if ppt_buffer:
-                    st.success("✅ PPT生成成功!")
+                    st.success("✅ PPT generated successfully!")
                     
-                    # 下载按钮
+                    # Download button
                     st.download_button(
-                        label="📥 下载PPT文件",
+                        label="📥 Download PPT File",
                         data=ppt_buffer,
                         file_name=ppt_name,
                         mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        help="点击下载生成的PPT报告"
+                        help="Click to download the generated PPT report"
                     )
                     
-                    # 显示PPT统计信息
-                    st.subheader("📊 PPT报告统计")
+                    # Display PPT statistics
+                    st.subheader("📊 PPT Report Statistics")
                     
-                    # 统计缺陷类型
+                    # Count defect types
                     defects_by_reason = defaultdict(list)
                     for defect in st.session_state.extracted_defects:
                         defects_by_reason[defect['reason']].append(defect)
@@ -721,45 +721,45 @@ def main():
                     stats_data = []
                     for reason, defects in sorted(defects_by_reason.items()):
                         stats_data.append({
-                            "缺陷原因": reason,
-                            "图片数量": len(defects),
-                            "涉及的PDF文件": len(set(d['pdf_name'] for d in defects))
+                            "Defect Reason": reason,
+                            "Image Count": len(defects),
+                            "Involved PDF Files": len(set(d['pdf_name'] for d in defects))
                         })
                     
                     st.dataframe(stats_data, use_container_width=True)
                 else:
-                    st.error("❌ PPT生成失败")
+                    st.error("❌ PPT generation failed")
 
-# 侧边栏信息
+# Sidebar information
 with st.sidebar:
-    st.header("ℹ️ 使用说明")
+    st.header("ℹ️ Instructions")
     st.markdown("""
-    ### 操作步骤：
-    1. **上传HSE的claim report PDF文件**：
-       - 点击"浏览文件"或拖放PDF文件
-       - 支持多文件同时上传
+    ### Steps:
+    1. **Upload HSE claim report PDF files**:
+       - Click "Browse files" or drag and drop PDF files
+       - Support multiple simultaneous uploads
     
-    2. **提取缺陷图片**：
-       - 系统自动识别PDF中的缺陷图片
-       - 自动提取缺陷原因和代码
-       - 生成图片预览和统计信息
+    2. **Extract defect images**:
+       - System automatically identifies defect images in PDFs
+       - Automatically extracts defect reasons and codes
+       - Generates image previews and statistics
     
-    3. **生成PPT报告**：
-       - 切换到PPT生成标签页
-       - 设置PPT文件名和布局
-       - 点击生成按钮创建PPT
+    3. **Generate PPT report**:
+       - Switch to PPT Generation tab
+       - Set PPT filename and layout
+       - Click generate button to create PPT
     
-    4. **下载结果**：
-       - 下载提取的图片（ZIP格式）
-       - 下载生成的PPT报告
+    4. **Download results**:
+       - Download extracted images (ZIP format)
+       - Download generated PPT report
     """)
     
-    st.header("📈 系统信息")
+    st.header("📈 System Information")
     st.markdown("""
-    - **版本**: 1.0.0
-    - **更新日期**: 2024-01-20
-    - **支持格式**: PDF文件
-    - **输出格式**: JPEG图片 + PPT报告
+    - **Version**: 1.0.0
+    - **Update Date**: 2024-01-20
+    - **Supported Formats**: PDF files
+    - **Output Formats**: JPEG images + PPT report
     """)
 
 if __name__ == "__main__":
