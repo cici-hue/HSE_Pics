@@ -16,7 +16,7 @@ import io
 
 # 设置页面配置
 st.set_page_config(
-    page_title="PDF缺陷图片提取与PPT生成系统",
+    page_title="HSE缺陷图片提取与PPT生成系统",
     page_icon="📊",
     layout="wide"
 )
