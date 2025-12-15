@@ -1,45 +1,4 @@
 import streamlit as st
-import sys
-import subprocess
-
-# 强制检查并安装依赖（仅用于排查，部署成功后可删除）
-def check_and_install_dependencies():
-    # 打印已安装的包
-    st.write("📦 已安装的依赖包：")
-    installed_packages = subprocess.check_output([sys.executable, "-m", "pip", "list"])
-    st.text(installed_packages.decode())
-    
-    # 检查关键包是否存在
-    required_packages = ["fitz", "pymupdf", "pptx", "PIL"]
-    for pkg in required_packages:
-        try:
-            if pkg == "fitz":
-                import fitz
-                st.success(f"✅ 找到 {pkg} (PyMuPDF) 模块")
-            elif pkg == "pymupdf":
-                import pymupdf  # 备用导入方式
-                st.success(f"✅ 找到 {pkg} 模块")
-            elif pkg == "pptx":
-                import pptx
-                st.success(f"✅ 找到 {pkg} (python-pptx) 模块")
-            elif pkg == "PIL":
-                import PIL
-                st.success(f"✅ 找到 {pkg} (Pillow) 模块")
-        except ImportError as e:
-            st.error(f"❌ 未找到 {pkg} 模块：{e}")
-            # 尝试手动安装（仅排查用）
-            st.warning(f"🔧 尝试手动安装 {pkg} 对应的包...")
-            if pkg in ["fitz", "pymupdf"]:
-                subprocess.call([sys.executable, "-m", "pip", "install", "pymupdf>=1.23.0"])
-            elif pkg == "pptx":
-                subprocess.call([sys.executable, "-m", "pip", "install", "python-pptx>=0.6.23"])
-            elif pkg == "PIL":
-                subprocess.call([sys.executable, "-m", "pip", "install", "Pillow>=10.0.1"])
-
-# 先执行依赖检查
-check_and_install_dependencies()
-
-import streamlit as st
 import fitz  # PyMuPDF
 # import PyMuPDF  # PyMuPDF
 import re
