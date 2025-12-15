@@ -1,0 +1,4 @@
+streamlit>=1.30.0
+pymupdf>=1.22.5
+python-pptx>=0.6.23
+Pillow>=10.0.1
