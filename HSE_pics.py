@@ -540,7 +540,7 @@ def main():
     st.title("📊 PDF缺陷提取与PPT生成系统")
     st.markdown("""
     ### 功能说明：
-    1. **上传PDF文件**：上传包含缺陷信息的PDF文档
+    1. **上传PDF文件**：上传HSE包含缺陷图片的Claim report PDF格式文档
     2. **自动提取缺陷图片**：系统自动识别和提取缺陷图片
     3. **生成PPT报告**：自动生成按缺陷原因分类的PPT报告
     4. **下载结果**：可以下载提取的图片和生成的PPT
@@ -735,7 +735,7 @@ with st.sidebar:
     st.header("ℹ️ 使用说明")
     st.markdown("""
     ### 操作步骤：
-    1. **上传PDF文件**：
+    1. **上传HSE的claim report PDF文件**：
        - 点击"浏览文件"或拖放PDF文件
        - 支持多文件同时上传
     
